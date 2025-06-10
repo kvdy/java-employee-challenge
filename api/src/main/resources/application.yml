@@ -1,2 +1,24 @@
 spring.application.name: employee-api
 server.port: 8111
+
+mock-employee-api:
+  base-url: http://localhost:8112/api/v1/employee
+  timeout:
+    read: 5s
+    write: 5s
+    connection: 5s
+  retry:
+    max-attempts: 3
+    wait-duration: 1s
+    max-wait-duration: 5s
+  rate-limiter:
+    limit-for-period: 10
+    limit-refresh-period: 30s
+    timeout-duration: 10s
+
+logging:
+  level:
+    com.reliaquest.api: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
