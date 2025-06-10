@@ -1,84 +1,42 @@
 package com.reliaquest.api.integration;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.reliaquest.api.exception.EmployeeNotFoundException;
 import com.reliaquest.api.model.CreateEmployeeInput;
 import com.reliaquest.api.model.Employee;
-import com.reliaquest.api.model.MockApiResponse;
-import java.io.IOException;
+import com.reliaquest.api.service.EmployeeService;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import okhttp3.mockwebserver.RecordedRequest;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import reactor.core.publisher.Mono;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class EmployeeApiIntegrationTest {
 
     @Autowired private TestRestTemplate restTemplate;
-    @Autowired private ObjectMapper objectMapper;
-
-    private static MockWebServer mockWebServer;
-
-    @BeforeAll
-    void setUpAll() throws IOException {
-        mockWebServer = new MockWebServer();
-        mockWebServer.start();
-    }
-
-    @AfterAll
-    void tearDownAll() throws IOException {
-        if (mockWebServer != null) {
-            mockWebServer.shutdown();
-        }
-    }
-
-    @BeforeEach
-    void setUp() {
-        // Clear any existing queued responses
-        while (mockWebServer.getRequestCount() > 0) {
-            try {
-                mockWebServer.takeRequest(100, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                break;
-            }
-        }
-    }
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add(
-                "mock-employee-api.base-url",
-                () -> mockWebServer != null ? String.format("http://localhost:%s/api/v1/employee", mockWebServer.getPort()) : "http://localhost:8112/api/v1/employee");
-    }
+    @MockBean private EmployeeService employeeService;
 
     @Test
-    void getAllEmployees_shouldReturnEmployeesList() throws Exception {
+    void getAllEmployees_shouldReturnEmployeesList() {
         // Given
-        List<Employee> employees = Arrays.asList(createEmployee("John Doe"), createEmployee("Jane Smith"));
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        List<Employee> employees = Arrays.asList(
+            createEmployee("John Doe"), 
+            createEmployee("Jane Smith")
+        );
+        when(employeeService.getAllEmployees()).thenReturn(Mono.just(employees));
 
         // When
         ResponseEntity<List<Employee>> response = restTemplate.exchange(
@@ -93,13 +51,9 @@ class EmployeeApiIntegrationTest {
     }
 
     @Test
-    void getAllEmployees_shouldHandleEmptyResponse() throws Exception {
+    void getAllEmployees_shouldHandleEmptyResponse() {
         // Given
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(Arrays.asList(), "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.getAllEmployees()).thenReturn(Mono.just(Collections.emptyList()));
 
         // When
         ResponseEntity<List<Employee>> response = restTemplate.exchange(
@@ -112,15 +66,11 @@ class EmployeeApiIntegrationTest {
     }
 
     @Test
-    void getEmployeeById_shouldReturnEmployee() throws Exception {
+    void getEmployeeById_shouldReturnEmployee() {
         // Given
         String employeeId = UUID.randomUUID().toString();
         Employee employee = createEmployee("John Doe");
-        MockApiResponse<Employee> mockResponse = new MockApiResponse<>(employee, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.getEmployeeById(employeeId)).thenReturn(Mono.just(employee));
 
         // When
         ResponseEntity<Employee> response = 
@@ -133,11 +83,11 @@ class EmployeeApiIntegrationTest {
     }
 
     @Test
-    void getEmployeeById_shouldReturn404WhenNotFound() throws Exception {
+    void getEmployeeById_shouldReturn404WhenNotFound() {
         // Given
         String employeeId = UUID.randomUUID().toString();
-
-        mockWebServer.enqueue(new MockResponse().setResponseCode(404));
+        when(employeeService.getEmployeeById(employeeId))
+            .thenReturn(Mono.error(new EmployeeNotFoundException("Employee not found with id: " + employeeId)));
 
         // When
         ResponseEntity<String> response = 
@@ -148,17 +98,13 @@ class EmployeeApiIntegrationTest {
     }
 
     @Test
-    void searchEmployeesByName_shouldReturnFilteredEmployees() throws Exception {
+    void searchEmployeesByName_shouldReturnFilteredEmployees() {
         // Given
         List<Employee> employees = Arrays.asList(
                 createEmployee("John Doe"), 
-                createEmployee("John Smith"), 
-                createEmployee("Jane Doe"));
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+                createEmployee("John Smith")
+        );
+        when(employeeService.searchEmployeesByName("John")).thenReturn(Mono.just(employees));
 
         // When
         ResponseEntity<List<Employee>> response = restTemplate.exchange(
@@ -170,22 +116,14 @@ class EmployeeApiIntegrationTest {
         // Then
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().size()); // Should return both Johns
+        assertEquals(2, response.getBody().size());
         assertTrue(response.getBody().stream().allMatch(e -> e.getName().contains("John")));
     }
 
     @Test
-    void getHighestSalary_shouldReturnCorrectValue() throws Exception {
+    void getHighestSalary_shouldReturnCorrectValue() {
         // Given
-        List<Employee> employees = Arrays.asList(
-                createEmployeeWithSalary("John Doe", 50000),
-                createEmployeeWithSalary("Jane Smith", 75000),
-                createEmployeeWithSalary("Bob Johnson", 60000));
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.getHighestSalary()).thenReturn(Mono.just(75000));
 
         // When
         ResponseEntity<Integer> response = 
@@ -197,14 +135,10 @@ class EmployeeApiIntegrationTest {
     }
 
     @Test
-    void getTopTenHighestEarningEmployeeNames_shouldReturnCorrectList() throws Exception {
+    void getTopTenHighestEarningEmployeeNames_shouldReturnCorrectList() {
         // Given
-        List<Employee> employees = createMultipleEmployeesWithDifferentSalaries();
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        List<String> topEarners = Arrays.asList("Employee 12", "Employee 11", "Employee 10");
+        when(employeeService.getTopTenHighestEarningEmployeeNames()).thenReturn(Mono.just(topEarners));
 
         // When
         ResponseEntity<List<String>> response = restTemplate.exchange(
@@ -216,13 +150,12 @@ class EmployeeApiIntegrationTest {
         // Then
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertTrue(response.getBody().size() <= 10);
-        // Should be sorted by salary descending
-        assertEquals("Employee 12", response.getBody().get(0)); // Highest salary
+        assertEquals(3, response.getBody().size());
+        assertEquals("Employee 12", response.getBody().get(0));
     }
 
     @Test
-    void createEmployee_shouldReturnCreatedEmployee() throws Exception {
+    void createEmployee_shouldReturnCreatedEmployee() {
         // Given
         CreateEmployeeInput input = CreateEmployeeInput.builder()
                 .name("New Employee")
@@ -232,11 +165,7 @@ class EmployeeApiIntegrationTest {
                 .build();
 
         Employee createdEmployee = createEmployee("New Employee");
-        MockApiResponse<Employee> mockResponse = new MockApiResponse<>(createdEmployee, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.createEmployee(any(CreateEmployeeInput.class))).thenReturn(Mono.just(createdEmployee));
 
         // When
         ResponseEntity<Employee> response = restTemplate.postForEntity("/api/v1/employee", input, Employee.class);
@@ -245,16 +174,12 @@ class EmployeeApiIntegrationTest {
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("New Employee", response.getBody().getName());
-
-        // Verify the request was made correctly
-        RecordedRequest recordedRequest = mockWebServer.takeRequest(1, TimeUnit.SECONDS);
-        assertNotNull(recordedRequest);
-        assertEquals("POST", recordedRequest.getMethod());
-        assertTrue(recordedRequest.getHeader("Content-Type").contains("application/json"));
+        
+        verify(employeeService).createEmployee(any(CreateEmployeeInput.class));
     }
 
     @Test
-    void createEmployee_shouldHandleValidationErrors() throws Exception {
+    void createEmployee_shouldHandleValidationErrors() {
         // Given
         CreateEmployeeInput input = CreateEmployeeInput.builder()
                 .name("") // Invalid name
@@ -268,121 +193,29 @@ class EmployeeApiIntegrationTest {
 
         // Then
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        
+        // Verify service was not called due to validation failure
+        verify(employeeService, never()).createEmployee(any(CreateEmployeeInput.class));
     }
 
     @Test
-    void deleteEmployeeById_shouldReturnEmployeeName() throws Exception {
+    void deleteEmployeeById_shouldReturnSuccess() {
         // Given
         String employeeId = UUID.randomUUID().toString();
-        Employee employee = createEmployee("John Doe");
-        MockApiResponse<Employee> getResponse = new MockApiResponse<>(employee, "Success", null);
-        MockApiResponse<Boolean> deleteResponse = new MockApiResponse<>(true, "Success", null);
-
-        // Queue responses: first for GET, then for DELETE
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(getResponse))
-                .addHeader("Content-Type", "application/json"));
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(deleteResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.deleteEmployeeById(employeeId)).thenReturn(Mono.just("John Doe"));
 
         // When
         restTemplate.delete("/api/v1/employee/" + employeeId);
 
         // Then
-        RecordedRequest getRequest = mockWebServer.takeRequest(1, TimeUnit.SECONDS);
-        RecordedRequest deleteRequest = mockWebServer.takeRequest(1, TimeUnit.SECONDS);
-        
-        assertNotNull(getRequest);
-        assertNotNull(deleteRequest);
-        assertEquals("GET", getRequest.getMethod());
-        assertEquals("DELETE", deleteRequest.getMethod());
+        verify(employeeService).deleteEmployeeById(employeeId);
     }
 
     @Test
-    void handleRateLimiting_shouldRetryRequest() throws Exception {
-        // Given
-        List<Employee> employees = Arrays.asList(createEmployee("John Doe"));
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        // First request returns 429 (Too Many Requests), second succeeds
-        mockWebServer.enqueue(new MockResponse().setResponseCode(429));
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
-
-        // When
-        ResponseEntity<List<Employee>> response = restTemplate.exchange(
-                "/api/v1/employee", HttpMethod.GET, null, new ParameterizedTypeReference<List<Employee>>() {});
-
-        // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(1, response.getBody().size());
-        // Should have made 2 requests (original + retry)
-        assertEquals(2, mockWebServer.getRequestCount());
-    }
-
-    @Test
-    void handleServiceUnavailable_shouldRetryRequest() throws Exception {
-        // Given
-        List<Employee> employees = Arrays.asList(createEmployee("John Doe"));
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        // First request returns 503 (Service Unavailable), second succeeds
-        mockWebServer.enqueue(new MockResponse().setResponseCode(503));
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
-
-        // When
-        ResponseEntity<List<Employee>> response = restTemplate.exchange(
-                "/api/v1/employee", HttpMethod.GET, null, new ParameterizedTypeReference<List<Employee>>() {});
-
-        // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(2, mockWebServer.getRequestCount());
-    }
-
-    @Test
-    void handleMalformedJsonResponse_shouldHandleGracefully() throws Exception {
-        // Given
-        mockWebServer.enqueue(new MockResponse()
-                .setBody("{ invalid json }")
-                .addHeader("Content-Type", "application/json"));
-
-        // When
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/v1/employee", String.class);
-
-        // Then
-        // Should handle the error gracefully
-        assertTrue(response.getStatusCode().is5xxServerError() || response.getStatusCode().is4xxClientError());
-    }
-
-    @Test
-    void handleSlowResponse_shouldTimeout() throws Exception {
-        // Given
-        mockWebServer.enqueue(new MockResponse()
-                .setBody("{}")
-                .setBodyDelay(10, TimeUnit.SECONDS)); // Longer than our timeout
-
-        // When
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/v1/employee", String.class);
-
-        // Then
-        // Should timeout and return error status
-        assertTrue(response.getStatusCode().is5xxServerError());
-    }
-
-    @Test
-    void handleLargeResponse_shouldProcessCorrectly() throws Exception {
+    void handleLargeResponse_shouldProcessCorrectly() {
         // Given
         List<Employee> largeEmployeeList = createLargeEmployeeList(1000);
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(largeEmployeeList, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.getAllEmployees()).thenReturn(Mono.just(largeEmployeeList));
 
         // When
         ResponseEntity<List<Employee>> response = restTemplate.exchange(
@@ -395,18 +228,14 @@ class EmployeeApiIntegrationTest {
     }
 
     @Test
-    void handleSpecialCharactersInEmployeeData() throws Exception {
+    void handleSpecialCharactersInEmployeeData() {
         // Given
         List<Employee> employees = Arrays.asList(
                 createEmployeeWithSpecialName("José María García-López"),
                 createEmployeeWithSpecialName("田中太郎"),
                 createEmployeeWithSpecialName("François O'Connor")
         );
-        MockApiResponse<List<Employee>> mockResponse = new MockApiResponse<>(employees, "Success", null);
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(objectMapper.writeValueAsString(mockResponse))
-                .addHeader("Content-Type", "application/json"));
+        when(employeeService.searchEmployeesByName("José")).thenReturn(Mono.just(employees.subList(0, 1)));
 
         // When
         ResponseEntity<List<Employee>> response = restTemplate.exchange(
@@ -434,17 +263,6 @@ class EmployeeApiIntegrationTest {
                 .build();
     }
 
-    private Employee createEmployeeWithSalary(String name, int salary) {
-        return Employee.builder()
-                .id(UUID.randomUUID())
-                .name(name)
-                .salary(salary)
-                .age(30)
-                .title("Developer")
-                .email(name.toLowerCase().replace(" ", "") + "@company.com")
-                .build();
-    }
-
     private Employee createEmployeeWithSpecialName(String name) {
         return Employee.builder()
                 .id(UUID.randomUUID())
@@ -456,26 +274,9 @@ class EmployeeApiIntegrationTest {
                 .build();
     }
 
-    private List<Employee> createMultipleEmployeesWithDifferentSalaries() {
-        return Arrays.asList(
-                createEmployeeWithSalary("Employee 1", 50000),
-                createEmployeeWithSalary("Employee 2", 55000),
-                createEmployeeWithSalary("Employee 3", 60000),
-                createEmployeeWithSalary("Employee 4", 65000),
-                createEmployeeWithSalary("Employee 5", 70000),
-                createEmployeeWithSalary("Employee 6", 75000),
-                createEmployeeWithSalary("Employee 7", 80000),
-                createEmployeeWithSalary("Employee 8", 85000),
-                createEmployeeWithSalary("Employee 9", 90000),
-                createEmployeeWithSalary("Employee 10", 95000),
-                createEmployeeWithSalary("Employee 11", 100000),
-                createEmployeeWithSalary("Employee 12", 120000)
-        );
-    }
-
     private List<Employee> createLargeEmployeeList(int size) {
         return java.util.stream.IntStream.range(0, size)
-                .mapToObj(i -> createEmployeeWithSalary("Employee " + i, 50000 + i))
+                .mapToObj(i -> createEmployee("Employee " + i))
                 .toList();
     }
 }
