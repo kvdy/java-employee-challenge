@@ -2,12 +2,11 @@ package com.reliaquest.api.model;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @Builder
@@ -32,5 +31,4 @@ public class Employee {
             return "employee_" + propertyName;
         }
     }
-
 }

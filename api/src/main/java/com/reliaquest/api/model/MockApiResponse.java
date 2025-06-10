@@ -14,4 +14,3 @@ public class MockApiResponse<T> {
     private String status;
     private String error;
 }
-
