@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # Mock Employee Server
+  mock-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock
+    container_name: employee-mock-server
+    ports:
+      - "8112:8112"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - employee-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8112/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Employee API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: employee-api
+    ports:
+      - "8111:8111"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - MOCK_EMPLOYEE_API_BASE_URL=http://mock-server:8112/api/v1/employee
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    depends_on:
+      mock-server:
+        condition: service_healthy
+    networks:
+      - employee-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8111/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 768M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Optional: Redis for future caching
+  redis:
+    image: redis:7-alpine
+    container_name: employee-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - employee-network
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    profiles:
+      - with-cache
+
+  # Optional: PostgreSQL for future persistence
+  postgres:
+    image: postgres:15-alpine
+    container_name: employee-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=employee_db
+      - POSTGRES_USER=employee_user
+      - POSTGRES_PASSWORD=employee_pass
+    networks:
+      - employee-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    profiles:
+      - with-db
+
+networks:
+  employee-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:

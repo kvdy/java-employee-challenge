@@ -1,148 +1,202 @@
-# ReliaQuest Coding Challenge
+# Employee Management API
 
-#### In this assessment you will be tasked with filling out the functionality of different methods that will be listed further down.
+A Spring Boot REST API that provides employee management capabilities with integration to an external mock employee service.
 
-These methods will require some level of API interactions with Mock Employee API at http://localhost:8112/api/v1/employee.
+## Prerequisites
 
-Please keep the following in mind when doing this assessment: 
-* clean coding practices
-* test driven development 
-* logging
-* scalability
+- Java 17 (Amazon Corretto recommended)
+- Gradle 7.6+
+- Port 8111 (API) and 8112 (Mock Server) available
 
-See the section **How to Run Mock Employee API** for further instruction on starting the Mock Employee API.
+## Getting Started
 
-### Endpoints to implement (API module)
+### 1. Start the Mock Employee Server
+```bash
+cd server
+./gradlew bootRun
+```
+The mock server will start on http://localhost:8112
 
-_See `com.reliaquest.api.controller.IEmployeeController` for details._
+### 2. Start the API Application
+```bash
+cd api
+./gradlew bootRun
+```
+The API will be available at http://localhost:8111
 
-getAllEmployees()
+### 3. Run Tests
+```bash
+./gradlew test
+```
 
-    output - list of employees
-    description - this should return all employees
+## API Endpoints
 
-getEmployeesByNameSearch(...)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/employee` | Get all employees |
+| GET | `/api/v1/employee/{id}` | Get employee by ID |
+| GET | `/api/v1/employee/search/{searchString}` | Search employees by name |
+| GET | `/api/v1/employee/highestSalary` | Get highest salary |
+| GET | `/api/v1/employee/topTenHighestEarningEmployeeNames` | Get top 10 earners |
+| POST | `/api/v1/employee` | Create new employee |
+| DELETE | `/api/v1/employee/{id}` | Delete employee |
 
-    path input - name fragment
-    output - list of employees
-    description - this should return all employees whose name contains or matches the string input provided
+## Example Requests
 
-getEmployeeById(...)
+### Get All Employees
+```bash
+curl http://localhost:8111/api/v1/employee
+```
 
-    path input - employee ID
-    output - employee
-    description - this should return a single employee
+### Create Employee
+```bash
+curl -X POST http://localhost:8111/api/v1/employee \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "salary": 75000,
+    "age": 30,
+    "title": "Software Engineer"
+  }'
+```
 
-getHighestSalaryOfEmployees()
+### Search by Name
+```bash
+curl http://localhost:8111/api/v1/employee/search/John
+```
 
-    output - integer of the highest salary
-    description - this should return a single integer indicating the highest salary of amongst all employees
+## Request/Response Models
 
-getTop10HighestEarningEmployeeNames()
+### Create Employee Request
+```json
+{
+  "name": "string",     // Required, non-empty
+  "salary": 0,          // Required, positive number
+  "age": 0,             // Required, 16-75
+  "title": "string"     // Required, non-empty
+}
+```
 
-    output - list of employees
-    description - this should return a list of the top 10 employees based off of their salaries
+### Employee Response
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "salary": 0,
+  "age": 0,
+  "title": "string",
+  "email": "string"
+}
+```
 
-createEmployee(...)
+## Error Responses
 
-    body input - attributes necessary to create an employee
-    output - employee
-    description - this should return a single employee, if created, otherwise error
+| Status Code | Description |
+|-------------|-------------|
+| 400 | Bad Request - Validation error |
+| 404 | Not Found - Employee not found |
+| 503 | Service Unavailable - External API error |
 
-deleteEmployeeById(...)
+## Configuration
 
-    path input - employee ID
-    output - name of the employee
-    description - this should delete the employee with specified id given, otherwise error
+Key configurations in `application.yml`:
 
-### Endpoints from Mock Employee API (Server module)
+```yaml
+mock-employee-api:
+  base-url: http://localhost:8112/api/v1/employee
+  
+resilience:
+  retry:
+    max-attempts: 3
+    wait-duration: 1s
+```
 
-    request:
-        method: GET
-        full route: http://localhost:8112/api/v1/employee
-    response:
-        {
-            "data": [
-                {
-                    "id": "4a3a170b-22cd-4ac2-aad1-9bb5b34a1507",
-                    "employee_name": "Tiger Nixon",
-                    "employee_salary": 320800,
-                    "employee_age": 61,
-                    "employee_title": "Vice Chair Executive Principal of Chief Operations Implementation Specialist",
-                    "employee_email": "tnixon@company.com",
-                },
-                ....
-            ],
-            "status": "Successfully processed request."
-        }
----
-    request:
-        method: GET
-        path: 
-            id (String)
-        full route: http://localhost:8112/api/v1/employee/{id}
-        note: 404-Not Found, if entity is unrecognizable
-    response:
-        {
-            "data": {
-                "id": "5255f1a5-f9f7-4be5-829a-134bde088d17",
-                "employee_name": "Bill Bob",
-                "employee_salary": 89750,
-                "employee_age": 24,
-                "employee_title": "Documentation Engineer",
-                "employee_email": "billBob@company.com",
-            },
-            "status": ....
-        }
----
-    request:
-        method: POST
-        body: 
-            name (String | not blank),
-            salary (Integer | greater than zero),
-            age (Integer | min = 16, max = 75),
-            title (String | not blank)
-        full route: http://localhost:8112/api/v1/employee
-    response:
-        {
-            "data": {
-                "id": "d005f39a-beb8-4390-afec-fd54e91d94ee",
-                "employee_name": "Jill Jenkins",
-                "employee_salary": 139082,
-                "employee_age": 48,
-                "employee_title": "Financial Advisor",
-                "employee_email": "jillj@company.com",
-            },
-            "status": ....
-        }
----
-    request:
-        method: DELETE
-        body:
-            name (String | not blank)
-        full route: http://localhost:8112/api/v1/employee/{name}
-    response:
-        {
-            "data": true,
-            "status": ....
-        }
+## Features
 
-### How to Run Mock Employee API (Server module)
+- **Reactive Programming**: Built with Spring WebFlux for non-blocking I/O
+- **Resilience**: Retry mechanism with exponential backoff for external API calls
+- **Validation**: Input validation using Jakarta Bean Validation
+- **Error Handling**: Global exception handler with meaningful error messages
 
-Start **Server** Spring Boot application.
-`./gradlew server:bootRun`
+## Postman Collection
 
-Each invocation of **Server** application triggers a new list of mock employee data. While live testing, you'll want to keep 
-this server running if you require consistent data. Additionally, the web server will randomly choose when to rate
-limit requests, so keep this mind when designing/implementing the actual Employee API.
+Import the `Employee_API.postman_collection.json` file into Postman to test all endpoints.
 
-_Note_: Console logs each mock employee upon startup.
+## Notes
 
-### Code Formatting
+- The mock employee server has rate limiting, so the API includes retry logic
+- All monetary values are in cents (integer representation)
+- Employee IDs are UUIDs
+- Search is case-insensitive and matches partial names
 
-This project utilizes Gradle plugin [Diffplug Spotless](https://github.com/diffplug/spotless/tree/main/plugin-gradle) to enforce format
-and style guidelines with every build. 
+## Future Enhancements
 
-To resolve any errors, you must run **spotlessApply** task.
-`./gradlew spotlessApply`
+### 1. Containerization
+- **Docker Support**: Add Dockerfile and docker-compose.yml for easy deployment
+- **Kubernetes Ready**: Create Helm charts for K8s deployment
+- **Container Registry**: Push images to Docker Hub or private registry
 
+### 2. Database Integration
+- **Caching Layer**: Add Redis for caching frequently accessed data
+- **Persistent Storage**: Integrate PostgreSQL/MongoDB for data persistence
+- **Event Sourcing**: Implement event-driven architecture with Kafka
+
+### 3. API Enhancements
+- **Pagination**: Add pagination support for large datasets
+- **Filtering & Sorting**: Advanced query parameters for data filtering
+- **GraphQL**: Alternative GraphQL endpoint for flexible queries
+- **API Versioning**: Implement proper versioning strategy (v1, v2)
+
+### 4. Security Improvements
+- **Authentication**: Add JWT-based authentication
+- **OAuth2**: Integrate with OAuth2 providers
+- **API Rate Limiting**: Implement rate limiting per client
+- **CORS Configuration**: Configurable CORS policies
+
+### 5. Observability
+- **Metrics**: Integrate Prometheus/Grafana for monitoring
+- **Distributed Tracing**: Add Zipkin/Jaeger for request tracing
+- **Health Checks**: Enhanced health check endpoints
+- **Logging**: Centralized logging with ELK stack
+
+### 6. Performance Optimization
+- **Connection Pooling**: Optimize WebClient connection pools
+- **Response Compression**: Enable GZIP compression
+- **Reactive Streams**: Full reactive pipeline end-to-end
+- **Circuit Breaker Dashboard**: Hystrix dashboard for monitoring
+
+### 7. Development Experience
+- **OpenAPI/Swagger**: Auto-generated API documentation
+- **Hot Reload**: Spring Boot DevTools for development
+- **API Client SDK**: Generate client libraries for different languages
+- **Integration Tests**: Testcontainers for integration testing
+
+## Scalability Options
+
+### Horizontal Scaling
+- **Load Balancing**: Deploy multiple instances behind a load balancer
+- **Service Mesh**: Integrate with Istio/Linkerd for microservices
+- **Auto-scaling**: Configure HPA (Horizontal Pod Autoscaler) in K8s
+
+### Vertical Scaling
+- **JVM Tuning**: Optimize heap size and GC settings
+- **Resource Limits**: Configure CPU/Memory limits appropriately
+- **Thread Pool Tuning**: Optimize Netty event loop threads
+
+### Data Scaling
+- **Read Replicas**: Distribute read load across replicas
+- **Sharding**: Partition data for large-scale deployments
+- **CDN Integration**: Cache static responses at edge locations
+
+## Quick Start - Docker (Future)
+
+```bash
+# Build Docker image
+docker build -t employee-api:latest .
+
+# Run with Docker Compose
+docker-compose up -d
+
+# Scale horizontally
+docker-compose up -d --scale api=3
+```
